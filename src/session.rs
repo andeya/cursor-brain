@@ -6,9 +6,13 @@ use lru::LruCache;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::warn;
+
+/// Minimum seconds between two consecutive persist writes (throttle).
+const PERSIST_DEBOUNCE_SECS: u64 = 5;
 
 #[async_trait]
 pub trait SessionStore: Send + Sync {
@@ -32,6 +36,8 @@ fn expand_tilde(path: &str) -> PathBuf {
 pub struct PersistentSessionStore {
     cache: Arc<RwLock<LruCache<String, String>>>,
     file_path: PathBuf,
+    /// Last persist time (seconds since UNIX_EPOCH) for debounce.
+    last_persist_secs: AtomicU64,
 }
 
 impl PersistentSessionStore {
@@ -52,6 +58,7 @@ impl PersistentSessionStore {
         Self {
             cache: Arc::new(RwLock::new(lru)),
             file_path,
+            last_persist_secs: AtomicU64::new(0),
         }
     }
 
@@ -92,7 +99,15 @@ impl SessionStore for PersistentSessionStore {
         {
             let mut guard = self.cache.write().await;
             guard.put(external_id, cursor_id);
-            Self::persist_sync(&guard, &self.file_path);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let last = self.last_persist_secs.load(Ordering::Relaxed);
+            if last == 0 || now.saturating_sub(last) >= PERSIST_DEBOUNCE_SECS {
+                Self::persist_sync(&guard, &self.file_path);
+                self.last_persist_secs.store(now, Ordering::Relaxed);
+            }
         }
     }
 
@@ -100,7 +115,15 @@ impl SessionStore for PersistentSessionStore {
         {
             let mut guard = self.cache.write().await;
             guard.pop(external_id);
-            Self::persist_sync(&guard, &self.file_path);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let last = self.last_persist_secs.load(Ordering::Relaxed);
+            if last == 0 || now.saturating_sub(last) >= PERSIST_DEBOUNCE_SECS {
+                Self::persist_sync(&guard, &self.file_path);
+                self.last_persist_secs.store(now, Ordering::Relaxed);
+            }
         }
     }
 }

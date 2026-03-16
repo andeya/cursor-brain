@@ -43,6 +43,45 @@ impl From<&Config> for ConfigFileExport {
     }
 }
 
+/// Deserializable config file shape; missing keys yield None / default in load_config.
+#[derive(Debug, serde::Deserialize)]
+#[serde(default)]
+struct ConfigFileLoad {
+    cursor_path: Option<String>,
+    port: Option<u16>,
+    bind_address: Option<String>,
+    request_timeout_sec: Option<u64>,
+    session_cache_max: Option<u32>,
+    session_header_name: Option<String>,
+    default_model: Option<String>,
+    fallback_model: Option<String>,
+    minimal_workspace_dir: Option<String>,
+    agent_mode: Option<String>,
+    sandbox: Option<String>,
+    allow_agent_write: Option<bool>,
+    forward_thinking: Option<String>,
+}
+
+impl Default for ConfigFileLoad {
+    fn default() -> Self {
+        Self {
+            cursor_path: None,
+            port: None,
+            bind_address: None,
+            request_timeout_sec: None,
+            session_cache_max: None,
+            session_header_name: None,
+            default_model: None,
+            fallback_model: None,
+            minimal_workspace_dir: None,
+            agent_mode: None,
+            sandbox: None,
+            allow_agent_write: None,
+            forward_thinking: None,
+        }
+    }
+}
+
 /// Default port for the HTTP server.
 pub const DEFAULT_PORT: u16 = 3001;
 /// Default request timeout in seconds.
@@ -131,13 +170,9 @@ fn cursor_search_paths() -> Vec<PathBuf> {
     let home = cursor_brain_home_dir();
     #[cfg(windows)]
     {
-        let local = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| {
-            home.join("AppData")
-                .join("Local")
-                .to_string_lossy()
-                .into_owned()
-        });
-        let local = PathBuf::from(local);
+        let local: PathBuf = std::env::var("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| home.join("AppData").join("Local"));
         vec![
             local
                 .join("Programs")
@@ -215,86 +250,54 @@ pub fn write_default_config_file(config: &Config) {
 /// Load config from ~/.cursor-brain/config.json only. Missing keys use built-in defaults.
 /// If the config file did not exist, it is created with the effective defaults after loading.
 pub fn load_config() -> Config {
-    let mut cursor_path: Option<String> = None;
-    let mut port = DEFAULT_PORT;
-    let mut bind_address = "0.0.0.0".to_string();
-    let mut request_timeout_sec = DEFAULT_REQUEST_TIMEOUT_SEC;
-    let mut session_cache_max = DEFAULT_SESSION_CACHE_MAX;
-    let mut session_header_name = DEFAULT_SESSION_HEADER_NAME.to_string();
-    let mut default_model: Option<String> = None;
-    let mut fallback_model: Option<String> = None;
-    let mut minimal_workspace_dir: Option<String> = None;
-    let mut agent_mode = "agent".to_string();
-    let mut sandbox = "enabled".to_string();
-    let mut allow_agent_write = true;
-    let mut forward_thinking = "content".to_string();
-
     let home = cursor_brain_home_dir();
     let path = home.join(".cursor-brain").join("config.json");
     let file_existed = path.exists();
-    if file_existed {
-        if let Ok(data) = std::fs::read_to_string(&path) {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) {
-                cursor_path = v
-                    .get("cursor_path")
-                    .and_then(|c| c.as_str())
-                    .map(String::from);
-                if let Some(p) = v.get("port").and_then(|p| p.as_u64()) {
-                    port = p.clamp(1, 65535) as u16;
-                }
-                if let Some(s) = v.get("bind_address").and_then(|s| s.as_str()) {
-                    if !s.is_empty() {
-                        bind_address = s.to_string();
-                    }
-                }
-                if let Some(t) = v.get("request_timeout_sec").and_then(|t| t.as_u64()) {
-                    request_timeout_sec = t.max(1);
-                }
-                if let Some(n) = v.get("session_cache_max").and_then(|n| n.as_u64()) {
-                    session_cache_max = n.clamp(1, 1_000_000) as u32;
-                }
-                if let Some(s) = v.get("session_header_name").and_then(|s| s.as_str()) {
-                    if !s.is_empty() {
-                        session_header_name = s.to_string();
-                    }
-                }
-                if let Some(m) = v.get("default_model").and_then(|m| m.as_str()) {
-                    if !m.is_empty() {
-                        default_model = Some(m.to_string());
-                    }
-                }
-                if let Some(m) = v.get("fallback_model").and_then(|m| m.as_str()) {
-                    if !m.is_empty() {
-                        fallback_model = Some(m.to_string());
-                    }
-                }
-                if let Some(d) = v.get("minimal_workspace_dir").and_then(|d| d.as_str()) {
-                    if !d.is_empty() {
-                        minimal_workspace_dir = Some(d.to_string());
-                    }
-                }
-                if let Some(m) = v.get("agent_mode").and_then(|m| m.as_str()) {
-                    if !m.is_empty() {
-                        agent_mode = m.to_string();
-                    }
-                }
-                if let Some(s) = v.get("sandbox").and_then(|s| s.as_str()) {
-                    if !s.is_empty() {
-                        sandbox = s.to_string();
-                    }
-                }
-                if let Some(b) = v.get("allow_agent_write").and_then(|b| b.as_bool()) {
-                    allow_agent_write = b;
-                }
-                if let Some(s) = v.get("forward_thinking").and_then(|s| s.as_str()) {
-                    let s = s.to_lowercase();
-                    if s == "off" || s == "content" || s == "reasoning_content" {
-                        forward_thinking = s;
-                    }
-                }
-            }
-        }
-    }
+    let load: ConfigFileLoad = if file_existed {
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|data| serde_json::from_str(&data).ok())
+            .unwrap_or_default()
+    } else {
+        ConfigFileLoad::default()
+    };
+
+    let port = load.port.unwrap_or(DEFAULT_PORT).clamp(1, 65535);
+    let request_timeout_sec = load
+        .request_timeout_sec
+        .unwrap_or(DEFAULT_REQUEST_TIMEOUT_SEC)
+        .max(1);
+    let session_cache_max = load
+        .session_cache_max
+        .unwrap_or(DEFAULT_SESSION_CACHE_MAX)
+        .clamp(1, 1_000_000);
+    let bind_address = load
+        .bind_address
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "0.0.0.0".to_string());
+    let session_header_name = load
+        .session_header_name
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_SESSION_HEADER_NAME.to_string());
+    let forward_thinking = load
+        .forward_thinking
+        .as_deref()
+        .map(|s| s.to_lowercase())
+        .filter(|s| s == "off" || s == "content" || s == "reasoning_content")
+        .unwrap_or_else(|| "content".to_string());
+    let cursor_path = load.cursor_path.filter(|s| !s.trim().is_empty());
+    let default_model = load.default_model.filter(|s| !s.trim().is_empty());
+    let fallback_model = load.fallback_model.filter(|s| !s.trim().is_empty());
+    let minimal_workspace_dir = load.minimal_workspace_dir.filter(|s| !s.trim().is_empty());
+    let agent_mode = load
+        .agent_mode
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "agent".to_string());
+    let sandbox = load
+        .sandbox
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "enabled".to_string());
+    let allow_agent_write = load.allow_agent_write.unwrap_or(true);
 
     let config = Config {
         cursor_path,

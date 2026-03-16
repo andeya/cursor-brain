@@ -75,7 +75,7 @@ fn completion_error_to_http(e: CompletionError) -> (axum::http::StatusCode, Json
         ),
         CompletionError::InvalidRequest(msg) => err_response(
             axum::http::StatusCode::BAD_REQUEST,
-            msg,
+            &msg,
             Some("invalid_request"),
             Some("invalid_request_error"),
         ),
@@ -165,7 +165,6 @@ async fn chat_completions(
 const LIST_MODELS_TIMEOUT_SECS: u64 = 15;
 
 async fn list_models(State(state): State<AppState>) -> Json<serde_json::Value> {
-    state.metrics.inc_requests();
     let config = state.config.clone();
     let metrics = state.metrics.clone();
     let ids: Vec<String> = match config.resolve_cursor_path() {
@@ -469,16 +468,19 @@ async fn request_id_and_log(
     next: Next,
 ) -> Response {
     state.metrics.inc_requests();
-    let request_id = uuid::Uuid::new_v4().to_string();
+    let request_id = request
+        .headers()
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.trim().is_empty())
+        .map(String::from)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let method = request.method().clone();
     let path = request.uri().path().to_string();
     let start = Instant::now();
-    let mut response = next.run(request).await;
+    let response = next.run(request).await;
     let status = response.status();
     let elapsed_ms = start.elapsed().as_millis();
-    if let Ok(hv) = request_id.parse::<HeaderValue>() {
-        response.headers_mut().insert("X-Request-Id", hv);
-    }
     tracing::info!(
         request_id = %request_id,
         method = %method,
@@ -487,7 +489,19 @@ async fn request_id_and_log(
         elapsed_ms = %elapsed_ms,
         "request"
     );
-    response
+    let hv = match HeaderValue::try_from(request_id.as_str()) {
+        Ok(v) => v,
+        Err(_) => {
+            tracing::warn!(
+                request_id = %request_id,
+                "x-request-id header value invalid, omitting"
+            );
+            return response;
+        }
+    };
+    let (mut parts, body) = response.into_parts();
+    parts.headers.insert("x-request-id", hv);
+    Response::from_parts(parts, body)
 }
 
 pub fn app(config: Arc<Config>) -> Router {
@@ -504,10 +518,6 @@ pub fn app(config: Arc<Config>) -> Router {
         metrics: metrics.clone(),
     };
     Router::new()
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            request_id_and_log,
-        ))
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/models", get(list_models))
         .route("/v1/models/:id", get(get_model_by_id))
@@ -521,5 +531,9 @@ pub fn app(config: Arc<Config>) -> Router {
         .route("/v1/embeddings", post(embeddings_501))
         .route("/v1/completions", post(completions_501))
         .fallback(not_found)
-        .with_state(state)
+        .with_state(state.clone())
+        .layer(axum::middleware::from_fn_with_state(
+            state,
+            request_id_and_log,
+        ))
 }

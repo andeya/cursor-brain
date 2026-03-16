@@ -43,8 +43,12 @@ fn remove_pid_file() {
 
 #[tokio::main]
 async fn main() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|e| {
+        eprintln!("cursor-brain: invalid RUST_LOG ({}), using 'info'", e);
+        EnvFilter::new("info")
+    });
     tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with(filter)
         .with(tracing_subscriber::fmt::layer())
         .init();
 

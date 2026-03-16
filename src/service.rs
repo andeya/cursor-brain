@@ -35,7 +35,7 @@ impl CompletionInput {
         };
         if user_msg.trim().is_empty() {
             return Err(CompletionError::InvalidRequest(
-                "no user message in messages",
+                "no user message in messages".to_string(),
             ));
         }
         let model = body
@@ -62,7 +62,7 @@ impl CompletionInput {
 #[derive(Debug)]
 pub enum CompletionError {
     CursorNotFound,
-    InvalidRequest(&'static str),
+    InvalidRequest(String),
     NoContent,
     SpawnFailed(std::io::Error),
     JoinFailed(String),
@@ -233,6 +233,8 @@ impl CompletionService {
         let options = self.spawn_options();
         let forward_thinking = self.config.forward_thinking.clone();
 
+        // Spawn runs in background; spawn/run errors are delivered via StreamDelta::Done
+        // (finish_reason e.g. "spawn_error: ...") so the client can see them on the stream.
         tokio::task::spawn_blocking(move || {
             let mut on_session_id = |cursor_id: &str| {
                 if let Some(ref ext) = external_session_for_spawn {
