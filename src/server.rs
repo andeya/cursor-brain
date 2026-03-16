@@ -462,6 +462,9 @@ async fn metrics_handler(State(state): State<AppState>) -> Json<serde_json::Valu
     }))
 }
 
+/// Request id: from header `x-request-id` if present, else new UUID per HTTP request.
+/// For stable request_id across client retries (e.g. Ironclaw retrying after 503), the client
+/// should send the same x-request-id on each retry (e.g. reuse the value from the previous response).
 async fn request_id_and_log(
     State(state): State<AppState>,
     request: Request<Body>,

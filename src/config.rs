@@ -1,6 +1,6 @@
 //! Configuration: single source of defaults; load from ~/.cursor-brain/config.json only (no env vars).
 //! Keys: port, bind_address, request_timeout_sec, session, default_model, fallback_model,
-//! cursor_path, minimal_workspace_dir, agent_mode, sandbox, allow_agent_write, forward_thinking.
+//! cursor_path, minimal_workspace_dir, sandbox, forward_thinking.
 //! On first run (no config file), the default config is written to disk.
 
 use std::path::PathBuf;
@@ -17,9 +17,7 @@ struct ConfigFileExport {
     default_model: Option<String>,
     fallback_model: Option<String>,
     minimal_workspace_dir: Option<String>,
-    agent_mode: String,
     sandbox: String,
-    allow_agent_write: bool,
     forward_thinking: String,
 }
 
@@ -35,9 +33,7 @@ impl From<&Config> for ConfigFileExport {
             default_model: c.default_model.clone(),
             fallback_model: c.fallback_model.clone(),
             minimal_workspace_dir: c.minimal_workspace_dir.clone(),
-            agent_mode: c.agent_mode.clone(),
             sandbox: c.sandbox.clone(),
-            allow_agent_write: c.allow_agent_write,
             forward_thinking: c.forward_thinking.clone(),
         }
     }
@@ -56,9 +52,7 @@ struct ConfigFileLoad {
     default_model: Option<String>,
     fallback_model: Option<String>,
     minimal_workspace_dir: Option<String>,
-    agent_mode: Option<String>,
     sandbox: Option<String>,
-    allow_agent_write: Option<bool>,
     forward_thinking: Option<String>,
 }
 
@@ -74,9 +68,7 @@ impl Default for ConfigFileLoad {
             default_model: None,
             fallback_model: None,
             minimal_workspace_dir: None,
-            agent_mode: None,
             sandbox: None,
-            allow_agent_write: None,
             forward_thinking: None,
         }
     }
@@ -136,12 +128,8 @@ pub struct Config {
     pub fallback_model: Option<String>,
     /// Workspace dir for cursor-agent (e.g. ~/.cursor-brain/workspace); no project MCP.
     pub minimal_workspace_dir: Option<String>,
-    /// "ask" | "agent"
-    pub agent_mode: String,
     /// "enabled" | "disabled"
     pub sandbox: String,
-    /// If false, do not pass --force to cursor-agent.
-    pub allow_agent_write: bool,
     /// How to return thinking: "off" | "content" | "reasoning_content". Default "content".
     pub forward_thinking: String,
 }
@@ -289,15 +277,10 @@ pub fn load_config() -> Config {
     let default_model = load.default_model.filter(|s| !s.trim().is_empty());
     let fallback_model = load.fallback_model.filter(|s| !s.trim().is_empty());
     let minimal_workspace_dir = load.minimal_workspace_dir.filter(|s| !s.trim().is_empty());
-    let agent_mode = load
-        .agent_mode
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "agent".to_string());
     let sandbox = load
         .sandbox
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "enabled".to_string());
-    let allow_agent_write = load.allow_agent_write.unwrap_or(true);
 
     let config = Config {
         cursor_path,
@@ -309,9 +292,7 @@ pub fn load_config() -> Config {
         default_model,
         fallback_model,
         minimal_workspace_dir,
-        agent_mode,
         sandbox,
-        allow_agent_write,
         forward_thinking,
     };
     if !file_existed {

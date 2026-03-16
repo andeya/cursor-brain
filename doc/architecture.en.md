@@ -9,7 +9,7 @@ cursor-brain is an **OpenAI-compatible HTTP service** backed by Cursor Agent. St
 
 ## Component layers
 
-<img src="images/architecture-en-layers.png" width="640" alt="Component layers diagram" />
+<img src="architecture.en-mermaid/Untitled-1.png" width="640" alt="Component layers diagram" />
 
 <details>
 <summary>Mermaid source</summary>
@@ -52,7 +52,7 @@ flowchart TB
 
 ## Request flow (chat completion)
 
-<img src="images/architecture-en-sequence.png" width="640" alt="Request flow sequence diagram" />
+<img src="architecture.en-mermaid/Untitled-2.png" width="640" alt="Request flow sequence diagram" />
 
 <details>
 <summary>Mermaid source</summary>
@@ -97,5 +97,4 @@ sequenceDiagram
 
 - [DESIGN.md](DESIGN.md) — design decisions, defaults, PID, platform support.
 - [openai-protocol.md](openai-protocol.md) — API alignment, `content` vs `reasoning_content`.
-- [provider-compat.md](provider-compat.md) — ironclaw, zeroclaw, openclaw.
 - [tutorial.en.md](tutorial.en.md) — quick start, configuration, API usage, deployment.

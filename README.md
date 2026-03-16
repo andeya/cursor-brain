@@ -14,7 +14,7 @@
 - **Cursor Agent backend**: Spawns the Cursor CLI as a subprocess; supports session resume and thinking output (`content` or `reasoning_content`).
 - **Config file only**: All settings from `~/.cursor-brain/config.json`; default file is written on first run.
 - **Observability**: Request ID header, JSON metrics (`/v1/metrics`), health with versions.
-- **Provider-ready**: Register as an Openclaw/Ironclaw/Zeroclaw provider; see [Provider compatibility](doc/provider-compat.md).
+- **Provider-ready**: Register as an Openclaw/Ironclaw/Zeroclaw provider (see README examples below).
 
 ## Quick start
 
@@ -45,9 +45,12 @@ Configuration is read **only** from `~/.cursor-brain/config.json` (no environmen
 | `bind_address`          | Listen address                           | `0.0.0.0`                   |
 | `cursor_path`           | Path to cursor-agent                     | auto-detect                 |
 | `request_timeout_sec`   | Per-request timeout (sec)                | 300                         |
+| `session_cache_max`     | Session cache capacity                   | 1000                        |
 | `session_header_name`   | Header for session id                    | `x-session-id`              |
+| `default_model`         | Default model when request omits model   | (none)                      |
+| `fallback_model`        | Fallback when no content                 | (none)                      |
 | `minimal_workspace_dir` | Agent workspace (no MCP)                 | `~/.cursor-brain/workspace` |
-| `agent_mode`            | `ask` or `agent`                         | `agent`                     |
+| `sandbox`               | `enabled` or `disabled`                  | `enabled`                   |
 | `forward_thinking`      | `off`, `content`, or `reasoning_content` | `content`                   |
 
 Example `~/.cursor-brain/config.json`:
@@ -85,7 +88,6 @@ On startup, the process writes its PID to `~/.cursor-brain/cursor-brain.pid` (cr
 | [Tutorial (EN)](doc/tutorial.en.md)                   | Quick start, config, API usage, deployment           |
 | [Design & defaults](doc/DESIGN.md)                    | Design decisions, default values, platform notes     |
 | [OpenAI alignment & thinking](doc/openai-protocol.md) | `content` vs `reasoning_content`, `forward_thinking` |
-| [Provider compatibility](doc/provider-compat.md)      | Openclaw, Ironclaw, Zeroclaw                         |
 | [API spec](doc/openapi.yaml)                          | OpenAPI 3.0 definition                               |
 
 **中文文档**：[README 中文](README.zh-CN.md) · [架构](doc/architecture.zh.md) · [教程](doc/tutorial.zh.md)
@@ -93,8 +95,73 @@ On startup, the process writes its PID to `~/.cursor-brain/cursor-brain.pid` (cr
 ## Register as Openclaw / Ironclaw / Zeroclaw provider
 
 1. Start cursor-brain (e.g. `cargo run` or `cursor-brain`).
-2. Add the provider to `~/.ironclaw/providers.json`: merge the object from [provider-definition.json](doc/provider-definition.json) into the array.
+2. Add the provider to your client's providers config (see examples below).
 3. In your client’s LLM setup, choose **Cursor Brain** and pick a model.
+
+### Example provider configuration
+
+**Openclaw** — edit `~/.openclaw/openclaw.json` (JSON5: comments and trailing commas allowed). Add a provider under `models.providers` and set it as primary if desired:
+
+```json5
+{
+  models: {
+    mode: "merge",
+    providers: {
+      cursor_brain: {
+        baseUrl: "http://127.0.0.1:3001/v1",
+        api: "openai-completions",
+        models: [
+          { id: "auto", name: "Cursor (auto)" },
+          { id: "cursor-default", name: "Cursor default" },
+        ],
+      },
+    },
+  },
+  agents: {
+    defaults: {
+      model: { primary: "cursor_brain/auto" },
+    },
+  },
+}
+```
+
+Use `cursor_brain/auto` or `cursor_brain/cursor-default` in the UI or CLI. Omit `agents.defaults.model` if you only want the provider available without changing the default. If cursor-brain is on another host, set `baseUrl` accordingly (e.g. `http://192.168.1.10:3001/v1`).
+
+**Ironclaw** — add to `~/.ironclaw/providers.json` (merge into the `providers` array):
+
+```json
+[
+  {
+    "id": "cursor",
+    "aliases": ["cursor_brain", "cursor-brain"],
+    "protocol": "open_ai_completions",
+    "default_base_url": "http://127.0.0.1:3001/v1",
+    "base_url_env": "CURSOR_BRAIN_BASE_URL",
+    "base_url_required": false,
+    "api_key_required": false,
+    "model_env": "CURSOR_BRAIN_MODEL",
+    "default_model": "auto",
+    "description": "Cursor Agent via cursor-brain (local OpenAI-compatible proxy)",
+    "setup": {
+      "kind": "open_ai_compatible",
+      "secret_name": "llm_cursor_brain_api_key",
+      "display_name": "Cursor Brain",
+      "can_list_models": true
+    }
+  }
+]
+```
+
+**Zeroclaw** — edit `~/.zeroclaw/config.toml` (create the file if missing). Use the `custom:` provider with cursor-brain’s base URL; no API key required:
+
+```toml
+default_provider = "custom:http://127.0.0.1:3001/v1"
+default_model = "auto"
+```
+
+If cursor-brain runs on another host or port, change the URL (e.g. `custom:http://192.168.1.10:3001/v1`). Zeroclaw appends `/chat/completions` to this base URL automatically.
+
+Full reference: [provider-definition.json](doc/provider-definition.json).
 
 ## License
 

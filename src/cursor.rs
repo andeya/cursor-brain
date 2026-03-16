@@ -1,5 +1,5 @@
 //! Cursor-agent subprocess layer: spawn, stdin write, stdout stream-json parsing.
-//! Options: workspace_dir, agent_mode (--mode), sandbox, allow_agent_write (--force).
+//! Options: workspace_dir, sandbox. --mode hardcoded to agent; write disabled (no --force).
 //! Used by service for chat completion and by server for list-models, version, agent subcommands.
 
 use std::io::{BufRead, BufReader, Write};
@@ -29,18 +29,14 @@ pub struct CompletionOutput {
 #[derive(Clone, Debug)]
 pub struct SpawnOptions {
     pub workspace_dir: Option<String>,
-    pub agent_mode: String, // "ask" | "agent"
-    pub sandbox: String,    // "enabled" | "disabled"
-    pub allow_agent_write: bool,
+    pub sandbox: String, // "enabled" | "disabled"
 }
 
 impl Default for SpawnOptions {
     fn default() -> Self {
         Self {
             workspace_dir: None,
-            agent_mode: "agent".to_string(),
             sandbox: "enabled".to_string(),
-            allow_agent_write: true,
         }
     }
 }
@@ -52,19 +48,16 @@ pub fn spawn_cursor_agent(
     resume_session_id: Option<&str>,
     options: &SpawnOptions,
 ) -> std::io::Result<Child> {
+    // As LLM proxy we do not want cursor-agent to load or use MCP: use minimal_workspace_dir (no
+    // .cursor/mcp.json) and do not pass --approve-mcps (default false).
     let mut args = vec![
         "-p".into(),
         "--output-format".into(),
         "stream-json".into(),
         "--stream-partial-output".into(),
         "--trust".into(),
-        "--approve-mcps".into(),
     ];
-    if options.allow_agent_write {
-        args.push("--force".into());
-    }
-    args.push("--mode".into());
-    args.push(options.agent_mode.clone());
+    // Write disabled: never pass --force. Mode hardcoded to agent.
     args.push("--sandbox".into());
     args.push(options.sandbox.clone());
 
@@ -80,11 +73,11 @@ pub fn spawn_cursor_agent(
             m
         }
     });
-    if let Some(m) = model_for_agent {
-        if !m.is_empty() && m != "auto" {
-            args.push("--model".into());
-            args.push(m.to_string());
-        }
+    // Always pass --model so cursor-agent gets an explicit model (some envs need this to return content).
+    let model_arg = model_for_agent.as_deref().unwrap_or("auto");
+    if !model_arg.is_empty() {
+        args.push("--model".into());
+        args.push(model_arg.to_string());
     }
     if let Some(r) = resume_session_id {
         if !r.is_empty() {
@@ -310,17 +303,17 @@ pub fn run_to_completion(
         }
     }
 
-    if out.content.is_empty()
+    let empty = out.content.is_empty()
         && out.thinking_text.is_empty()
         && out
             .reasoning_content
             .as_deref()
-            .is_none_or(|s| s.is_empty())
-    {
-        let stderr = stderr_handle
-            .and_then(|h| h.join().ok())
-            .unwrap_or_default();
-        let stderr = stderr.trim();
+            .is_none_or(|s| s.is_empty());
+    let stderr = stderr_handle
+        .and_then(|h| h.join().ok())
+        .unwrap_or_default();
+    let stderr = stderr.trim();
+    if empty {
         if !stderr.is_empty() {
             tracing::warn!(
                 cursor_agent_stderr = %stderr,

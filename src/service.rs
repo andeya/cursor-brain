@@ -93,9 +93,7 @@ impl CompletionService {
     fn spawn_options(&self) -> SpawnOptions {
         SpawnOptions {
             workspace_dir: self.config.workspace_dir_for_spawn(),
-            agent_mode: self.config.agent_mode.clone(),
             sandbox: self.config.sandbox.clone(),
-            allow_agent_write: self.config.allow_agent_write,
         }
     }
 
@@ -118,6 +116,7 @@ impl CompletionService {
             }
         });
 
+        // One completion id per request; must not change across retries (no_content, fallback_model).
         let id = format!("chatcmpl-{}", uuid::Uuid::new_v4().to_simple());
         let mut resume = resume_session_id;
         let mut no_content_retried = false;

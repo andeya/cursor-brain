@@ -14,7 +14,7 @@
 - **Cursor Agent 后端**：以子进程方式调用 Cursor CLI；支持会话恢复与思考过程输出（`content` 或 `reasoning_content`）。
 - **仅配置文件**：所有配置来自 `~/.cursor-brain/config.json`；首次运行会写入默认文件。
 - **可观测**：请求 ID 头、JSON 指标（`/v1/metrics`）、带版本信息的健康检查。
-- **Provider 就绪**：可注册为 Openclaw/Ironclaw/Zeroclaw 提供方；见 [Provider 兼容](doc/provider-compat.md)。
+- **Provider 就绪**：可注册为 Openclaw/Ironclaw/Zeroclaw 提供方（见下方 README 示例）。
 
 ## 快速开始
 
@@ -45,9 +45,12 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 | `bind_address`          | 监听地址                                | `0.0.0.0`                   |
 | `cursor_path`           | cursor-agent 路径                       | 自动检测                    |
 | `request_timeout_sec`   | 单次请求超时（秒）                      | 300                         |
+| `session_cache_max`     | 会话缓存容量                            | 1000                        |
 | `session_header_name`   | 会话 id 请求头名                        | `x-session-id`              |
+| `default_model`         | 请求未指定 model 时的默认模型           | （无）                      |
+| `fallback_model`        | 无内容时的回退模型                      | （无）                      |
 | `minimal_workspace_dir` | Agent 工作目录（无 MCP）                | `~/.cursor-brain/workspace` |
-| `agent_mode`            | `ask` 或 `agent`                        | `agent`                     |
+| `sandbox`               | `enabled` 或 `disabled`                 | `enabled`                   |
 | `forward_thinking`      | `off`、`content` 或 `reasoning_content` | `content`                   |
 
 示例 `~/.cursor-brain/config.json`：
@@ -85,7 +88,6 @@ cursor-brain **不**负责安装或升级 cursor-agent。请自行安装：
 | [教程（中文）](doc/tutorial.zh.md)              | 快速开始、配置、API 用法、部署                       |
 | [设计与默认值](doc/DESIGN.md)                   | 设计决策、默认值、平台说明                           |
 | [OpenAI 对齐与思考过程](doc/openai-protocol.md) | `content` 与 `reasoning_content`、`forward_thinking` |
-| [Provider 兼容](doc/provider-compat.md)         | Openclaw、Ironclaw、Zeroclaw                         |
 | [API 规范](doc/openapi.yaml)                    | OpenAPI 3.0 定义                                     |
 
 **English**: [README](README.md) · [Architecture](doc/architecture.en.md) · [Tutorial](doc/tutorial.en.md)
@@ -93,8 +95,73 @@ cursor-brain **不**负责安装或升级 cursor-agent。请自行安装：
 ## 注册为 Openclaw / Ironclaw / Zeroclaw 提供方
 
 1. 启动 cursor-brain（如 `cargo run` 或 `cursor-brain`）。
-2. 在 `~/.ironclaw/providers.json` 中添加提供方：将 [provider-definition.json](doc/provider-definition.json) 中的对象合并到数组中。
+2. 在客户端的 provider 配置中添加本服务（见下方示例）。
 3. 在客户端的 LLM 设置中选择 **Cursor Brain** 并选择模型。
+
+### 示例：Provider 配置
+
+**Openclaw** — 编辑 `~/.openclaw/openclaw.json`（JSON5，支持注释与尾逗号）。在 `models.providers` 下添加 provider，需要时设为默认模型：
+
+```json5
+{
+  models: {
+    mode: "merge",
+    providers: {
+      cursor_brain: {
+        baseUrl: "http://127.0.0.1:3001/v1",
+        api: "openai-completions",
+        models: [
+          { id: "auto", name: "Cursor (auto)" },
+          { id: "cursor-default", name: "Cursor default" },
+        ],
+      },
+    },
+  },
+  agents: {
+    defaults: {
+      model: { primary: "cursor_brain/auto" },
+    },
+  },
+}
+```
+
+在界面或 CLI 中使用 `cursor_brain/auto` 或 `cursor_brain/cursor-default`。若不想改默认模型，可省略 `agents.defaults.model`。若 cursor-brain 在其它机器，请修改 `baseUrl`（如 `http://192.168.1.10:3001/v1`）。
+
+**Ironclaw** — 在 `~/.ironclaw/providers.json` 中合并进 `providers` 数组：
+
+```json
+[
+  {
+    "id": "cursor",
+    "aliases": ["cursor_brain", "cursor-brain"],
+    "protocol": "open_ai_completions",
+    "default_base_url": "http://127.0.0.1:3001/v1",
+    "base_url_env": "CURSOR_BRAIN_BASE_URL",
+    "base_url_required": false,
+    "api_key_required": false,
+    "model_env": "CURSOR_BRAIN_MODEL",
+    "default_model": "auto",
+    "description": "Cursor Agent via cursor-brain (local OpenAI-compatible proxy)",
+    "setup": {
+      "kind": "open_ai_compatible",
+      "secret_name": "llm_cursor_brain_api_key",
+      "display_name": "Cursor Brain",
+      "can_list_models": true
+    }
+  }
+]
+```
+
+**Zeroclaw** — 编辑 `~/.zeroclaw/config.toml`（若不存在则新建）。使用 `custom:` 指定 cursor-brain 的 base URL，无需 API key：
+
+```toml
+default_provider = "custom:http://127.0.0.1:3001/v1"
+default_model = "auto"
+```
+
+若 cursor-brain 跑在其它主机或端口，请修改 URL（如 `custom:http://192.168.1.10:3001/v1`）。Zeroclaw 会自动在该 base URL 后追加 `/chat/completions`。
+
+完整说明见 [provider-definition.json](doc/provider-definition.json)。
 
 ## 许可证
 

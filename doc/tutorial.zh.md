@@ -28,9 +28,7 @@
 | `default_model`         | 请求未指定 model 时的默认模型           | （无）                      |
 | `fallback_model`        | 无内容时的回退模型                      | （无）                      |
 | `minimal_workspace_dir` | agent 工作目录（无项目 MCP）            | `~/.cursor-brain/workspace` |
-| `agent_mode`            | `ask` 或 `agent`                        | `agent`                     |
 | `sandbox`               | `enabled` 或 `disabled`                 | `enabled`                   |
-| `allow_agent_write`     | 为 false 时不传 `--force`               | true                        |
 | `forward_thinking`      | `off`、`content` 或 `reasoning_content` | `content`                   |
 
 ### 配置示例
@@ -88,8 +86,6 @@
 1. 启动 cursor-brain（如 `cargo run`）。
 2. 在 `~/.ironclaw/providers.json` 中添加提供方：将 [provider-definition.json](provider-definition.json) 中的对象合并到数组中。
 3. 在 Ironclaw 的 LLM 设置中选择 **Cursor Brain** 并选择模型。
-
-ironclaw、zeroclaw、openclaw 详见 [provider-compat.md](provider-compat.md)。
 
 ## 安装 cursor-agent
 

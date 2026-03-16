@@ -28,9 +28,7 @@ User-facing guide: quick start, configuration, API usage, deployment. See [archi
 | `default_model`         | Default model when request omits model       | (none)                      |
 | `fallback_model`        | Fallback when no content                     | (none)                      |
 | `minimal_workspace_dir` | Workspace for agent (no project MCP)         | `~/.cursor-brain/workspace` |
-| `agent_mode`            | `ask` or `agent`                             | `agent`                     |
 | `sandbox`               | `enabled` or `disabled`                      | `enabled`                   |
-| `allow_agent_write`     | If false, do not pass `--force`              | true                        |
 | `forward_thinking`      | `off`, `content`, or `reasoning_content`     | `content`                   |
 
 ### Example config
@@ -88,8 +86,6 @@ All 4xx/5xx responses use: `{ "error": { "message", "code", "type" } }`. Respons
 1. Start cursor-brain (e.g. `cargo run`).
 2. Add provider to `~/.ironclaw/providers.json`: merge the object from [provider-definition.json](provider-definition.json) into the array.
 3. In Ironclaw LLM setup, choose **Cursor Brain** and pick a model.
-
-See [provider-compat.md](provider-compat.md) for ironclaw, zeroclaw, openclaw.
 
 ## Installing cursor-agent
 
