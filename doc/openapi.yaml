@@ -1,0 +1,214 @@
+openapi: 3.0.3
+info:
+  title: cursor-brain API
+  description: Generic OpenAI-compatible HTTP service backed by Cursor Agent.
+  version: "0.1.0"
+
+servers:
+  - url: http://localhost:3001
+    description: Default local server
+
+paths:
+  /v1/chat/completions:
+    post:
+      summary: Create chat completion
+      operationId: createChatCompletion
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model: { type: string }
+                messages: { type: array }
+                stream: { type: boolean }
+      responses:
+        "200":
+          description: OK (JSON or SSE)
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: cursor-agent unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/models:
+    get:
+      summary: List models
+      operationId: listModels
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  object: { type: string, example: list }
+                  data: { type: array }
+
+  /v1/models/{id}:
+    get:
+      summary: Get model by id
+      operationId: getModel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Model not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/health:
+    get:
+      summary: Health and versions
+      operationId: health
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  cursor: { type: boolean }
+                  port: { type: integer }
+                  session_storage: { type: string }
+                  cursor_agent_version: { type: string }
+                  cursor_brain_version: { type: string }
+
+  /v1/version:
+    get:
+      summary: cursor-agent version
+      operationId: version
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cursor_agent_version: { type: string }
+        "503":
+          description: cursor-agent unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/agent/about:
+    get:
+      summary: agent about
+      operationId: agentAbout
+      responses:
+        "200":
+          description: OK (raw or parsed)
+        "503":
+          description: cursor-agent unavailable
+        "504":
+          description: Timeout
+
+  /v1/agent/status:
+    get:
+      summary: agent status
+      operationId: agentStatus
+      responses:
+        "200":
+          description: OK
+        "503":
+          description: cursor-agent unavailable
+        "504":
+          description: Timeout
+
+  /v1/agent/sessions:
+    get:
+      summary: List agent sessions (agent ls)
+      operationId: agentSessions
+      responses:
+        "200":
+          description: OK
+        "503":
+          description: cursor-agent unavailable
+        "504":
+          description: Timeout
+
+  /v1/agent/chats:
+    post:
+      summary: Create empty chat (agent create-chat)
+      operationId: agentCreateChat
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+        "503":
+          description: cursor-agent unavailable
+        "504":
+          description: Timeout
+
+  /v1/embeddings:
+    post:
+      summary: Embeddings (not implemented)
+      operationId: embeddings
+      responses:
+        "501":
+          description: Not Implemented
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/completions:
+    post:
+      summary: Legacy completions (not implemented)
+      operationId: completions
+      responses:
+        "501":
+          description: Not Implemented
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/metrics:
+    get:
+      summary: Metrics (JSON)
+      operationId: metrics
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests_total: { type: integer }
+                  cursor_calls_ok: { type: integer }
+                  cursor_calls_fail: { type: integer }
+                  cursor_calls_timeout: { type: integer }
+
+components:
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          properties:
+            message: { type: string }
+            code: { type: string }
+            type: { type: string }

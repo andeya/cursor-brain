@@ -1,0 +1,30 @@
+[package]
+name = "cursor-brain"
+version = "1.0.0"
+edition = "2021"
+authors = ["andeya <andeyalee@outlook.com>"]
+license = "MIT"
+description = "OpenAI-compatible HTTP service powered by Cursor Agent. Drop-in chat/completions endpoint for Openclaw, Ironclaw, Zeroclaw, or any OpenAI API client."
+readme = "README.md"
+repository = "https://github.com/andeya/cursor-brain"
+homepage = "https://github.com/andeya/cursor-brain"
+documentation = "https://github.com/andeya/cursor-brain#readme"
+keywords = ["openai", "cursor", "http-api", "agent", "chat-completions"]
+categories = ["development-tools", "network-programming", "web-programming"]
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["json", "macros"] }
+futures-util = "0.3"
+async-stream = "0.3"
+uuid = { version = "0.8", features = ["v4"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bytes = "1"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+lru = "0.12"
+async-trait = "0.1"
+dirs = "6"
